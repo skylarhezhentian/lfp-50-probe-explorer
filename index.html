@@ -64,6 +64,7 @@
 <body>
 <div id="lfp-explorer">
   <h2>LFP in brain space</h2>
+  <div id="lfp-status" class="text-small" role="status">Loading recorded LFP…</div>
   <div class="text-small" id="lfp-scope"></div>
   <div class="viz-controls">
     <label class="form-label">View<select class="form-select" id="lfp-view"><option value="brain">3D brain locations</option><option value="surface">Time × depth × amplitude</option></select></label>
@@ -92,11 +93,13 @@
   <div class="lfp-legend text-small"><span id="lfp-low">0×</span><span class="lfp-ramp" aria-hidden="true"></span><span id="lfp-high">≥2× median</span><span id="lfp-mid">Median over 100 s</span></div>
   <div id="lfp-selection" class="text-small tabular-nums"></div>
   <div id="lfp-qc" class="text-small"></div>
-  <h3 id="lfp-trace-title">Amplitude through the excerpt</h3>
+  <h3 id="lfp-trace-title">Amplitude through time</h3>
+  <p id="lfp-chart-help" class="text-small">Click either plot to select a time and pause playback. Focus a plot and use the arrow keys to move through time.</p>
   <svg id="lfp-trace" role="img" aria-label="LFP RMS amplitude across 100 seconds at the selected depth, with current time marked"></svg>
   <section aria-labelledby="lfp-wave-title">
     <h3 id="lfp-wave-title">Voltage through time</h3>
     <div id="lfp-wave-label" class="text-small"></div>
+    <div id="lfp-wave-current" class="text-small tabular-nums"></div>
     <svg id="lfp-wave" role="img" aria-label="Signed LFP voltage from one median-depth channel at 500 Hz across the 100-second excerpt, with the selected time marked"></svg>
   </section>
   <div id="lfp-announcement" class="sr-only" aria-live="polite"></div>
@@ -105,6 +108,9 @@
 </div>
 <style>
   #lfp-explorer { position:relative; }
+  #lfp-explorer svg:focus-visible { outline:2px solid var(--viz-series-1); outline-offset:3px; }
+  #lfp-chart-help { margin:4px 0 8px; }
+  #lfp-wave-current { margin:4px 0; }
   #lfp-explorer .viz-controls { margin:12px 0; }
   #lfp-explorer .lfp-playback { margin-top:12px; }
   #lfp-explorer .lfp-time-label { flex:1; }
@@ -133,6 +139,7 @@
 (() => {
   const root=document.getElementById('lfp-explorer');
   const el=id=>root.querySelector('#lfp-'+id);
+  try {
   const regionName=r=>r==='root'?'unassigned':r==='void'?'outside atlas':r;
   const S=JSON.parse(el('signal-data').textContent), A=JSON.parse(el('anatomy-data').textContent);
   const decode=(b64,signed)=>{const b=atob(b64), a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return signed?new Int16Array(a.buffer):new Uint16Array(a.buffer);};
@@ -186,16 +193,33 @@
     line3(pos(0,state.time,0),pos(23,state.time,0),colors.fg,1.4,.75);ctx.fillStyle=colors.muted;ctx.fillText(`Probe ${state.probe+1} · 24 depth groups · 0.5 s RMS`,8,18);
   }
   const chartTooltip=document.createElement('div');chartTooltip.className='tooltip lfp-trace-tooltip';chartTooltip.hidden=true;chartTooltip.setAttribute('role','tooltip');root.appendChild(chartTooltip);
-  function chart(id,data,ylab,xmax,cursor,format,hoverMode='sample'){const svg=d3.select(el(id)),w=el(id).getBoundingClientRect().width;if(!w)return;const h=185,m={l:70,r:18,t:14,b:44},xr=[m.l,w-m.r],yr=[h-m.b,m.t];svg.attr('viewBox',`0 0 ${w} ${h}`).style('height',h+'px');svg.selectAll('*').remove();const ext=d3.extent(data,d=>d.y),pad=(ext[1]-ext[0])*.08||1,x=d3.scaleLinear().domain([0,xmax]).range(xr),y=d3.scaleLinear().domain([Math.min(0,ext[0]-pad),ext[1]+pad]).range(yr);
+  function seek(index){
+    stop();state.time=Math.max(0,Math.min(T-1,Math.round(index)));
+    sync(false);savedState();
+  }
+  function chartKeydown(event){
+    const keys={ArrowLeft:state.time-1,ArrowDown:state.time-1,ArrowRight:state.time+1,ArrowUp:state.time+1,Home:0,End:T-1};
+    if(!Object.prototype.hasOwnProperty.call(keys,event.key))return;
+    event.preventDefault();seek(keys[event.key]);
+  }
+  function updateChartCursors(){
+    for(const id of ['trace','wave']){
+      const svg=d3.select(el(id)),w=el(id).getBoundingClientRect().width;
+      const x=70+(w-88)*(state.time*dt+dt/2)/(T*dt);
+      svg.select('.time-cursor').attr('x1',x).attr('x2',x);
+      svg.attr('aria-valuenow',state.time*dt).attr('aria-valuetext',el('time-label').textContent);
+    }
+  }
+  function chart(id,data,ylab,xmax,cursor,format,hoverMode='sample'){const svg=d3.select(el(id)),w=el(id).getBoundingClientRect().width;if(!w)return;svg.attr('role','slider').attr('tabindex',0).attr('aria-label',id==='wave'?'Voltage chart: select excerpt time':'Amplitude chart: select excerpt time').attr('aria-describedby','lfp-chart-help').attr('aria-valuemin',0).attr('aria-valuemax',(T-1)*dt).attr('aria-valuenow',state.time*dt).on('keydown',chartKeydown);const h=185,m={l:70,r:18,t:14,b:44},xr=[m.l,w-m.r],yr=[h-m.b,m.t];svg.attr('viewBox',`0 0 ${w} ${h}`).style('height',h+'px');svg.selectAll('*').remove();const ext=d3.extent(data,d=>d.y),pad=(ext[1]-ext[0])*.08||1,x=d3.scaleLinear().domain([0,xmax]).range(xr),y=d3.scaleLinear().domain([Math.min(0,ext[0]-pad),ext[1]+pad]).range(yr);
     svg.append('rect').attr('data-chart-frame','').attr('x',xr[0]).attr('y',yr[1]).attr('width',xr[1]-xr[0]).attr('height',yr[0]-yr[1]).attr('fill','none').attr('stroke',colors.border);
     svg.append('g').attr('transform',`translate(0,${yr[0]})`).call(d3.axisBottom(x).ticks(w<440?4:6).tickSizeOuter(0));svg.append('g').attr('transform',`translate(${xr[0]},0)`).call(d3.axisLeft(y).ticks(4).tickSizeOuter(0));svg.selectAll('.domain,.tick line').attr('stroke',colors.border);
     svg.append('text').attr('class','axis-title').attr('data-axis','x').attr('x',(xr[0]+xr[1])/2).attr('y',h-5).attr('text-anchor','middle').text('Time from excerpt start (s)');svg.append('text').attr('class','axis-title').attr('data-axis','y').attr('transform',`translate(16,${(yr[0]+yr[1])/2}) rotate(-90)`).attr('text-anchor','middle').text(ylab);
-    svg.append('path').datum(data).attr('d',d3.line().x(d=>x(d.x)).y(d=>y(d.y))).attr('fill','none').attr('stroke',colors.series).attr('stroke-width',1.4);
+    svg.append('path').datum(data).attr('class','signal-path').attr('d',d3.line().x(d=>x(d.x)).y(d=>y(d.y))).attr('fill','none').attr('stroke',colors.series).attr('stroke-width',1.4);
     if(cursor)svg.append('line').attr('class','time-cursor').attr('x1',x(state.time*dt+.25)).attr('x2',x(state.time*dt+.25)).attr('y1',yr[1]).attr('y2',yr[0]).attr('stroke',colors.fg).attr('stroke-width',1.3);
     const guide=svg.append('line').attr('data-chart-hover-guide','').attr('y1',yr[1]).attr('y2',yr[0]).attr('stroke',colors.muted).style('display','none'),marker=svg.append('circle').attr('data-chart-hover-marker','').attr('r',3.5).attr('fill',colors.series).style('display','none');
-    svg.append('rect').attr('data-chart-hit','').attr('data-chart-hover-overlay','cross-series').attr('x',xr[0]).attr('y',yr[1]).attr('width',xr[1]-xr[0]).attr('height',yr[0]-yr[1]).attr('fill','transparent').on('pointermove',function(event){const [mx]=d3.pointer(event,this),time=x.invert(mx),j=d3.bisector(d=>d.x).left(data,time),lo=data[Math.max(0,j-1)],hi=data[Math.min(data.length-1,j)],v=lo.y+(hi.y-lo.y)*(hi.x===lo.x?0:(time-lo.x)/(hi.x-lo.x));guide.attr('x1',mx).attr('x2',mx).style('display',null);marker.attr('cx',mx).attr('cy',y(v)).style('display',null);const near=data[d3.bisector(d=>d.x).center(data,time)];chartTooltip.textContent=hoverMode==='bin'?`${(near.x-.25).toFixed(1)}–${(near.x+.25).toFixed(1)} s bin · ${format(near.y)}`:`${near.x.toFixed(3)} s sample · ${format(near.y)}`;chartTooltip.hidden=false;const r=root.getBoundingClientRect();chartTooltip.style.left=Math.max(0,Math.min(w-180,event.clientX-r.left-50))+'px';chartTooltip.style.top=(event.clientY-r.top-45)+'px';}).on('pointerleave',()=>{guide.style('display','none');marker.style('display','none');chartTooltip.hidden=true;}).on('click',function(event){if(cursor){state.time=Math.max(0,Math.min(199,Math.floor(x.invert(d3.pointer(event,this)[0])/dt)));sync(false);savedState();}});
+    svg.append('rect').attr('data-chart-hit','').attr('data-chart-hover-overlay','cross-series').attr('x',xr[0]).attr('y',yr[1]).attr('width',xr[1]-xr[0]).attr('height',yr[0]-yr[1]).attr('fill','transparent').style('cursor','crosshair').on('pointermove',function(event){const [mx]=d3.pointer(event,this),time=x.invert(mx),j=d3.bisector(d=>d.x).left(data,time),lo=data[Math.max(0,j-1)],hi=data[Math.min(data.length-1,j)],v=lo.y+(hi.y-lo.y)*(hi.x===lo.x?0:(time-lo.x)/(hi.x-lo.x));guide.attr('x1',mx).attr('x2',mx).style('display',null);marker.attr('cx',mx).attr('cy',y(v)).style('display',null);const near=data[d3.bisector(d=>d.x).center(data,time)];chartTooltip.textContent=hoverMode==='bin'?`${(near.x-.25).toFixed(1)}–${(near.x+.25).toFixed(1)} s bin · ${format(near.y)}`:`${near.x.toFixed(3)} s sample · ${format(near.y)}`;chartTooltip.hidden=false;const r=root.getBoundingClientRect();chartTooltip.style.left=Math.max(0,Math.min(w-180,event.clientX-r.left-50))+'px';chartTooltip.style.top=(event.clientY-r.top-45)+'px';}).on('pointerleave',()=>{guide.style('display','none');marker.style('display','none');chartTooltip.hidden=true;}).on('click',function(event){if(cursor)seek(Math.floor(x.invert(d3.pointer(event,this)[0])/dt));});
   }
-  function drawCharts(){if(typeof d3==='undefined'||!colors.fg)return;chart('trace',Array.from({length:T},(_,t)=>({x:t*.5+.25,y:value(state.probe,state.group,t)})),'Amplitude (µV RMS)',S.meta.duration_seconds,true,v=>`${v.toFixed(2)} µV RMS`,'bin');const samples=S.waveform.shape[1],offset=state.probe*samples;chart('wave',Array.from({length:samples},(_,t)=>({x:t/S.waveform.fs_hz,y:wave[offset+t]*S.waveform.scale_uV})),'Voltage (µV)',S.waveform.duration_seconds,true,v=>`${v.toFixed(2)} µV`,'sample');}
+  function drawCharts(){if(typeof d3==='undefined'||!colors.fg)return;chart('trace',Array.from({length:T},(_,t)=>({x:t*.5+.25,y:value(state.probe,state.group,t)})),'Amplitude (µV RMS)',(T*dt),true,v=>`${v.toFixed(2)} µV RMS`,'bin');const samples=S.waveform.shape[1],offset=state.probe*samples;chart('wave',Array.from({length:samples},(_,t)=>({x:t/S.waveform.fs_hz,y:wave[offset+t]*S.waveform.scale_uV})),'Voltage (µV)',S.waveform.duration_seconds,true,v=>`${v.toFixed(2)} µV`,'sample');}
   function sync(rebuild=true){for(const key of ['view','session','probe','group','time','speed','scale','angle'])el(key).value=state[key];if(rebuild){chooseProbeOptions();chooseGroupOptions();}const p=probes[state.probe],a=geo.get(p.pid),v=value(state.probe,state.group,state.time);el('time-label').textContent=`${(state.time*.5).toFixed(1)}–${((state.time+1)*.5).toFixed(1)} s`;
     el('scope').textContent=state.session==='all'?'50 probes · 26 sessions · 21 mice · each recording’s own 100-second excerpt':`${visible().length} probes in this session · ${p.subject} · 100-second excerpt`;
     el('selection').textContent=`Probe ${state.probe+1} · ${p.subject} · depth ${state.group+1}/24 · ${regionName(a.regions[state.group])} · ${v.toFixed(2)} µV RMS · ${(v/Math.max(1e-12,medians[state.probe*G+state.group])).toFixed(2)}× median`;
@@ -203,14 +227,18 @@
     el('qc').textContent=(state.session==='all'?'Composite across sessions; playback is not simultaneous brain-wide activity. ':`Excerpt starts at session time ${p.t0_session_seconds.toFixed(3)} s. `)+(p.historical_timing_qc_pass?'':'Selected probe has a historical timing-QC flag.');
     el('low').textContent=state.scale==='relative'?'0×':'0 µV';el('mid').textContent=state.scale==='relative'?'Median over 100 s':'Color capped at 98th percentile';el('high').textContent=state.scale==='relative'?'≥2× median':`≥${absCeil.toFixed(0)} µV`;
     el('trace-title').textContent=`Amplitude through time · probe ${state.probe+1}, depth ${state.group+1}`;
-    el('wave-title').textContent=`Voltage through time · probe ${state.probe+1}, channel ${p.waveform_channel_index+1}`;el('wave-label').textContent=`Channel ${p.waveform_channel_index} (zero-based) · ${Math.round(p.waveform_channel_depth_um)} µm from tip · ${regionName(p.waveform_channel_region)} · ${S.waveform.fs_hz} Hz signed voltage`;
-    draw();if(rebuild)drawCharts();else{const x=70+(el('trace').getBoundingClientRect().width-88)*(state.time*dt+dt/2)/S.meta.duration_seconds;for(const id of ['trace','wave'])d3.select(el(id)).select('.time-cursor').attr('x1',x).attr('x2',x);}
+    el('wave-title').textContent='Voltage through time · probe '+(state.probe+1);
+    el('wave-label').textContent='Median-depth channel '+p.waveform_channel_index+' (zero-based) · '+Math.round(p.waveform_channel_depth_um)+' µm from tip · '+regionName(p.waveform_channel_region)+' · '+S.waveform.fs_hz+' Hz signed voltage';
+    const sample=Math.min(S.waveform.shape[1]-1,Math.round((state.time+.5)*dt*S.waveform.fs_hz));
+    const voltage=wave[state.probe*S.waveform.shape[1]+sample]*S.waveform.scale_uV;
+    el('wave-current').textContent='Voltage at '+(sample/S.waveform.fs_hz).toFixed(3)+' s: '+voltage.toFixed(2)+' µV';
+    draw();if(rebuild)drawCharts();updateChartCursors();
   }
   function stop(){playing=false;el('play').textContent='Play';el('play').setAttribute('aria-pressed','false');cancelAnimationFrame(frameToken);}
   function tick(t){if(!playing)return;if(!lastFrame)lastFrame=t;elapsed+=(t-lastFrame)*state.speed;lastFrame=t;if(elapsed>=500){state.time+=Math.floor(elapsed/500);elapsed%=500;if(state.time>=199){state.time=199;stop();savedState();}sync(false);}if(playing)frameToken=requestAnimationFrame(tick);}
   el('play').onclick=()=>{if(playing){stop();savedState();return;}if(state.time===199)state.time=0;playing=true;lastFrame=0;elapsed=0;el('play').textContent='Pause';el('play').setAttribute('aria-pressed','true');frameToken=requestAnimationFrame(tick);};
   for(const key of ['view','session','probe','group','speed','scale','angle'])el(key).addEventListener('change',()=>{state[key]=['probe','group','speed'].includes(key)?Number(el(key).value):el(key).value;if(key==='session'&&!visible().includes(state.probe))state.probe=visible()[0];if(key==='angle'){const angles={oblique:[-.42,.57],top:[0,Math.PI/2-.01],side:[Math.PI/2,.05]};[state.yaw,state.pitch]=angles[state.angle];state.zoom=1;}if(key==='view'){state.yaw=-.42;state.pitch=.57;state.angle='oblique';state.zoom=1;}sync();savedState();el('announcement').textContent=`Probe ${state.probe+1}, depth ${state.group+1}, ${state.view==='brain'?'brain locations':'time and depth'}.`;});
-  el('time').addEventListener('input',()=>{stop();state.time=Number(el('time').value);sync(false);});el('time').addEventListener('change',savedState);
+  el('time').addEventListener('input',()=>seek(Number(el('time').value)));el('time').addEventListener('change',savedState);
   function nearest(x,y){let best=null,d=18;for(const q of points){const e=Math.hypot(q.x-x,q.y-y);if(e<d){d=e;best=q;}}return best;}
   canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);drag={x:e.offsetX,y:e.offsetY,ox:e.offsetX,oy:e.offsetY,moved:false};el('hover').hidden=true;});
   canvas.addEventListener('pointermove',e=>{if(drag){const dx=e.offsetX-drag.x,dy=e.offsetY-drag.y;state.yaw+=dx*.008;state.pitch=Math.max(-1.5,Math.min(1.5,state.pitch+dy*.008));drag.x=e.offsetX;drag.y=e.offsetY;drag.moved=drag.moved||Math.hypot(drag.ox-e.offsetX,drag.oy-e.offsetY)>4;draw();return;}const q=nearest(e.offsetX,e.offsetY);if(!q){el('hover').hidden=true;return;}const p=probes[q.p],g=geo.get(p.pid);el('hover').textContent=`Probe ${q.p+1} · ${p.subject} · ${regionName(g.regions[q.g])} · depth ${q.g+1} · ${value(q.p,q.g,state.time).toFixed(2)} µV RMS`;el('hover').hidden=false;el('hover').style.left=Math.max(0,Math.min(width-220,e.offsetX+12))+'px';el('hover').style.top=Math.max(0,e.offsetY-56)+'px';});
@@ -221,7 +249,13 @@
   window.addEventListener('openai:set_globals',event=>{if(event.detail&&event.detail.globals&&event.detail.globals.widgetState){applySaved(event.detail.globals.widgetState);sync();}});
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',theme);
   new MutationObserver(()=>{theme();}).observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-theme']});
-  theme();sync();root.dataset.ready='true';
+  theme();sync();root.dataset.ready='true';el('status').hidden=true;
+  } catch(error) {
+    root.dataset.ready='error';
+    el('status').textContent='The LFP viewer could not load. Please reload the page.';
+    el('status').setAttribute('role','alert');
+    console.error('LFP viewer initialization failed:',error);
+  }
 })();
 </script>
 
