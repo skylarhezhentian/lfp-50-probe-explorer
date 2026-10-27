@@ -10,7 +10,7 @@ Open `index.html` directly in a modern browser. The viewer is a self-contained f
 - 24 measured depth groups per probe, each comprising 16 consecutive cached channels.
 - A 100-second, 500 Hz cached LFP excerpt per probe.
 - One amplitude value per group per 0.5-second window: the mean of the 16 channels' RMS amplitudes.
-- A two-second signed-voltage trace for the channel nearest the middle depth of the selected probe.
+- A signed-voltage trace for the channel nearest the middle depth of the selected probe, synchronized to the selected 0.5-second time window.
 
 The all-probe display overlays distinct sessions in atlas space. Their shared elapsed-time slider does **not** represent simultaneous brain-wide activity. Select an individual recording before comparing its probes in time.
 
