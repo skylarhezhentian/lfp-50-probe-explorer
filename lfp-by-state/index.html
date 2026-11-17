@@ -96,7 +96,6 @@
   svg { display: block; width: 100%; overflow: visible; }
   svg text { fill: var(--muted-fg); font-size: 12px; font-family: var(--font); }
   svg text.strong { fill: var(--fg); }
-  .figs { margin: 22px 0 6px; } .figs-title { font-size: 18px; margin: 0 0 8px; } .figs figure { margin: 0 0 22px; } .figs figcaption { font-size: 14px; line-height: 1.5; margin-bottom: 8px; color: var(--fg); } .figs img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
   details { margin: 10px 0; }
   summary { padding: 6px 0; cursor: pointer; }
   .tablewrap { overflow-x: auto; }
@@ -171,13 +170,6 @@
     <svg id="ls-region" role="img" aria-label="Difference in LFP amplitude between biased and engaged trials for each brain area, with one dot per mouse and the average with its 95% interval"></svg>
     <details><summary>Numbers behind this chart</summary><div class="tablewrap" id="ls-region-table"></div></details>
   </details>
-  <section class="figs" aria-label="Figures">
-    <h2 class="figs-title">Figures</h2>
-    <figure><figcaption><b>Do the inferred states make sense?</b> Four recorded sessions. Top: inferred GLM-HMM state probability. Middle: correct (black) and incorrect (red) trials with running accuracy. Bottom: block side. Errors cluster where the model leaves the engaged state, and the biased states tend to follow the block: biased left covers 12.7% of trials in left blocks and 3.2% in right blocks.</figcaption><a href="figures/fig_states_vs_correct_block.png" target="_blank" rel="noopener"><img src="figures/fig_states_vs_correct_block.png" alt="Do the inferred states make sense?" loading="lazy"></a></figure>
-    <figure><figcaption><b>Replication of Ashwood et al. (2022).</b> Example mouse ZFM-01935: the classic lapse model and the 3-state GLM-HMM, each fitted, sampled and compared with the observed psychometric curve. On held-out data the 3-state model scores 0.460 bits/trial and 83.2% accuracy, against 0.418 and 81.8% for the lapse model. Across mice the 3-state solution appears in 14 of 21 and adds 0.079 bits/trial over the 1-state GLM.</figcaption><a href="figures/paper_replication_lapse_vs_glmhmm.png" target="_blank" rel="noopener"><img src="figures/paper_replication_lapse_vs_glmhmm.png" alt="Replication of Ashwood et al. (2022)" loading="lazy"></a></figure>
-    <figure><figcaption><b>Z-scored differences, 1 s before the stimulus.</b> A: what 1 SD of trial-to-trial variability means in each band. B: biased minus engaged, averaged over 18 mice, in SD units. Every band is within 0.04 SD of zero. C: local differences are wider than chance (SD 1.23 vs 1.00), with 11% of positions beyond the chance range where 5% would be expected, in both directions.</figcaption><a href="figures/fig_z_summary.png" target="_blank" rel="noopener"><img src="figures/fig_z_summary.png" alt="Z-scored differences, 1 s before the stimulus" loading="lazy"></a></figure>
-    <figure><figcaption><b>Z-scored differences through the trial.</b> Biased minus engaged per band, averaged over 18 mice (band = 95% interval). Units are the 1 s pre-stimulus SD, so single 50 ms steps look larger. High gamma dips about 0.4 SD around 1 s after the stimulus, which is uncorrected and likely linked to choice and reward.</figcaption><a href="figures/fig_z_timecourse.png" target="_blank" rel="noopener"><img src="figures/fig_z_timecourse.png" alt="Z-scored differences through the trial" loading="lazy"></a></figure>
-  </section>
   <details>
     <summary>How this was made</summary>
     <div id="ls-method"></div>
