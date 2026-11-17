@@ -37,6 +37,10 @@
   #ls-intro li { margin: 0 0 8px; break-inside: avoid; }
   @media (min-width: 900px) { #ls-intro { max-width: none; columns: 2; column-gap: 48px; } }
   #ls-intro b { font-weight: 600; }
+  #ls-intro li { list-style: none; margin-left: -20px; }
+  #ls-intro details { margin: 0; }
+  #ls-intro summary { cursor: pointer; }
+  #ls-intro .intro-body { margin: 4px 0 0 18px; }
   .small { font-size: 13px; color: var(--muted-fg); }
   .num { font-variant-numeric: tabular-nums; }
 
@@ -462,7 +466,7 @@
   const scope = `${tot.probes} Neuropixels probes in ${tot.mice} mice over ${tot.sessions} recording sessions: ${tot.trials.toLocaleString()} trials (${tot.trials_by_state[0].toLocaleString()} engaged, ${tot.trials_by_state[1].toLocaleString()} biased left, ${tot.trials_by_state[2].toLocaleString()} biased right)`;
   $('sub').textContent = DATA.sub || '';
   const fill = { scope, min: MIN, probes: tot.probes, missL: probes.filter(p => p.n[1] < MIN).length, missR: probes.filter(p => p.n[2] < MIN).length };
-  $('intro').innerHTML = (DATA.intro || []).map(p => `<li>${p.replace(/\{(\w+)\}/g, (m, k) => k in fill ? fill[k] : m)}</li>`).join('');
+  $('intro').innerHTML = (DATA.intro || []).map(p => { const t = p.replace(/\{(\w+)\}/g, (m, k) => k in fill ? fill[k] : m), m = t.match(/^<b>(.*?)\.?<\/b>\s*(.*)$/s); return m ? `<li><details><summary><b>${m[1]}</b></summary><div class="intro-body">${m[2]}</div></details></li>` : `<li>${t}</li>`; }).join('');
   $('min').textContent = MIN;
   $('method').innerHTML = (DATA.method || []).map(p => `<p class="small">${p}</p>`).join('');
   new ResizeObserver(() => { const r = canvas.getBoundingClientRect(); width = r.width; height = r.height; const ratio = Math.min(2, window.devicePixelRatio || 1); canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio); ctx.setTransform(ratio, 0, 0, ratio, 0, 0); draw(); drawCharts(); }).observe(root);
